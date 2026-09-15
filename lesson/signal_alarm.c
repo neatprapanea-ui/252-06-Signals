@@ -1,6 +1,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 void my_alarm(int sig) {
   for (int i = 0; i < 5; i++)
@@ -14,7 +15,8 @@ int main(void) {
   
   if (pid == 0){
       sleep(3);
-      kill(getppid(), SIGALRM);
+      kill(getppid(), SIGALRM); //ให้ตัวลูกเป็นตัวส่งสัญญาณเอง ไม่ได้ใช้ฟังก์ชันในการส่ง
+      //เอา IDพ่อแม่มาร แล้วส่ง SIGALRM ไปให้พ่อกับแม่
       exit(0);
     }
   printf("Waiting for alarm...\n");
