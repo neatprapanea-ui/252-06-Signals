@@ -30,10 +30,19 @@ int run_worker(pid_t supervisor_pid) {
 
     /* TODO: add SIGUSR1 and SIGUSR2 to wait_mask. */
 
+    sigaddset(&wait_mask, SIGUSR1); // Signal 1
+    sigaddset(&wait_mask, SIGUSR2); // Signal 2
+
     printf("worker: ready\n");
     fflush(stdout);
 
     /* TODO: send SIGUSR1 to supervisor_pid (readiness notification). */
+
+    /* sent it to supervisor to tell "ready" */
+    if(kill(supervisor_pid, SIGUSR1) == -1)
+    {
+        return 1;
+    }
 
     int tasks_done = 0;
     while (tasks_done < NUM_TASKS) {
@@ -42,21 +51,40 @@ int run_worker(pid_t supervisor_pid) {
         /* TODO: call sigwait() with &wait_mask to receive the next signal
          *       into sig. Check the return value; return 1 on error. */
 
-        if (sig == SIGUSR1) {
+        if(sigwait(&wait_mask, &sig) != 0)
+        {
+            return 1;
+        }
+
+        if (sig == SIGUSR1) 
+        {
             tasks_done++;
             printf("worker: received task %d\n", tasks_done);
             fflush(stdout);
 
             /* TODO: send SIGUSR1 back to supervisor_pid as an acknowledgement. */
+            /* send it to supeervisor to tell "ack" */
+            if(kill(supervisor_pid, SIGUSR1) == -1)
+            {
+                return 1;
+            }
         }
     }
 
     /* TODO: call sigwait() once more to receive SIGUSR2 (the shutdown signal). */
     /* (You do not need to inspect which signal was received here.) */
 
+    int sig = 0;
+    if(sigwait(&wait_mask, &sig) != 0)
+    {
+        return 1;
+    }
+
     printf("worker: all tasks done, exiting\n");
     fflush(stdout);
     return 0;
+    
+    // end of worker
 }
 
 /*
@@ -85,16 +113,36 @@ int run_supervisor(pid_t worker_pid) {
 
     /* TODO: add SIGUSR1 and SIGCHLD to wait_mask. */
 
+    sigaddset(&wait_mask, SIGUSR1); // for wait "ack" & "ready" from worker
+    sigaddset(&wait_mask, SIGCHLD); // for wait when worker is shutting down
+
     /* TODO: call sigwait() to wait for SIGUSR1 (worker ready notification).
      *       Discard the received signal number. Return 1 on error. */
 
+    int sig = 0;
+    if(sigwait(&wait_mask, &sig) != 0)
+    {
+        return 1;
+    }
+
+    /* loop for send work to worker */
     for (int i = 1; i <= NUM_TASKS; i++) {
         printf("supervisor: sending task %d\n", i);
         fflush(stdout);
 
         /* TODO: send SIGUSR1 to worker_pid. */
 
+        if(kill(worker_pid, SIGUSR1) == -1)
+        {
+            return 1;
+        }
+
         /* TODO: call sigwait() to wait for SIGUSR1 ack from the worker. */
+
+        if(sigwait(&wait_mask, &sig) != 0)
+        {
+            return 1;
+        }
     }
 
     printf("supervisor: shutting down worker\n");
@@ -102,15 +150,33 @@ int run_supervisor(pid_t worker_pid) {
 
     /* TODO: send SIGUSR2 to worker_pid (shutdown command). */
 
+    if(kill(worker_pid, SIGUSR2) == -1)
+    {
+        return 1;
+    }
+
     /* TODO: call sigwait() to wait for SIGCHLD (worker exit notification). */
+
+    if(sigwait(&wait_mask, &sig) != 0)
+    {
+        return 1;
+    }
 
     int status;
     /* TODO: call waitpid() to reap the worker. Use worker_pid, &status, 0. */
-    (void)status;
+
+    if(waitpid(worker_pid, &status, 0) == -1)
+    {
+        return 1;
+    }
+
+    //(void)status;
 
     printf("supervisor: worker exited cleanly\n");
     fflush(stdout);
     return 0;
+
+    // end of supervvisor
 }
 
 int main(void) {
@@ -125,18 +191,21 @@ int main(void) {
     sigaddset(&block_mask, SIGUSR2);
     sigaddset(&block_mask, SIGCHLD);
 
-    if (sigprocmask(SIG_BLOCK, &block_mask, NULL) == -1) {
+    if (sigprocmask(SIG_BLOCK, &block_mask, NULL) == -1) 
+    {
         perror("sigprocmask");
         return 1;
     }
 
     pid_t child_pid = fork();
-    if (child_pid < 0) {
+    if (child_pid < 0) 
+    {
         perror("fork");
         return 1;
     }
 
-    if (child_pid == 0) {
+    if (child_pid == 0) 
+    {
         return run_worker(getppid());
     }
 
